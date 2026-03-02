@@ -1,4 +1,4 @@
-# Модуль приймає context і додає своє ім'я (напр. "courses")
+
 module "label" {
   source  = "cloudposse/label/null"
   version = "0.25.0"

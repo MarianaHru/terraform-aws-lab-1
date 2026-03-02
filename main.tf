@@ -9,7 +9,7 @@ provider "aws" {
   }
 }
 
-# Базовий генератор імен (змінено на lpnu)
+
 module "base_label" {
   source    = "cloudposse/label/null"
   version   = "0.25.0"
@@ -17,7 +17,7 @@ module "base_label" {
   stage     = "dev"
 }
 
-# 1. Таблиця Курсів
+
 module "dynamodb_courses" {
   source     = "./modules/dynamodb"
   table_name = "courses"
@@ -25,7 +25,7 @@ module "dynamodb_courses" {
   context    = module.base_label.context
 }
 
-# 2. Таблиця Авторів
+
 module "dynamodb_authors" {
   source     = "./modules/dynamodb"
   table_name = "authors"
@@ -33,7 +33,7 @@ module "dynamodb_authors" {
   context    = module.base_label.context
 }
 
-# 3. Таблиця Категорій
+
 module "dynamodb_categories" {
   source     = "./modules/dynamodb"
   table_name = "categories"
@@ -41,7 +41,7 @@ module "dynamodb_categories" {
   context    = module.base_label.context
 }
 
-# Точний список твоїх функцій
+
 locals {
   api_functions = [
     "delete-course",
@@ -53,11 +53,11 @@ locals {
   ]
 }
 
-# СТВОРЕННЯ 6 ОКРЕМИХ РОЛЕЙ (По одній на кожну лямбду)
+
 resource "aws_iam_role" "lambda_exec" {
   for_each = toset(local.api_functions)
   
-  # Формуємо ім'я ролі: lpnu-dev-delete-course-role
+  
   name = "lpnu-dev-${each.key}-role"
 
   assume_role_policy = jsonencode({
@@ -70,7 +70,7 @@ resource "aws_iam_role" "lambda_exec" {
   })
 }
 
-# СТВОРЕННЯ 6 ПОЛІТИК (По одній на кожну роль)
+
 resource "aws_iam_role_policy" "lambda_policy" {
   for_each = toset(local.api_functions)
   
@@ -97,22 +97,22 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
-# Архівування коду
+
 data "archive_file" "lambda_zip" {
   type        = "zip"
   source_file = "${path.module}/functions/index.py"
   output_path = "${path.module}/functions/lambda_function.zip"
 }
 
-# СТВОРЕННЯ 6 ЛЯМБДА ФУНКЦІЙ
+
 resource "aws_lambda_function" "api" {
   for_each      = toset(local.api_functions)
   filename      = data.archive_file.lambda_zip.output_path
   
-  # Формуємо ім'я функції: lpnu-dev-delete-course
+  
   function_name = "lpnu-dev-${each.key}"
   
-  # Кожна функція отримує свою власну роль
+  
   role          = aws_iam_role.lambda_exec[each.key].arn
   handler       = "index.handler"
   runtime       = "python3.9"

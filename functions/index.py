@@ -7,13 +7,13 @@ dynamodb = boto3.resource('dynamodb')
 def handler(event, context):
     action = os.environ.get('ACTION')
     
-    # Збираємо ARNs та імена для всіх 3-х таблиць
+    
     courses_tbl = os.environ.get('COURSES_TABLE_NAME')
     authors_tbl = os.environ.get('AUTHORS_TABLE_NAME')
     
     message = f"Функція [{action}] успішно запущена."
 
-    # Приклад: якщо це лямбда для курсів — пишемо в таблицю курсів
+    
     if action == "create-course":
         table = dynamodb.Table(courses_tbl)
         table.put_item(Item={
@@ -23,7 +23,7 @@ def handler(event, context):
         })
         message = "Курс створено в таблиці Courses!"
         
-    # Приклад: якщо це лямбда для авторів — пишемо в таблицю авторів
+    
     elif action == "create-author":
         table = dynamodb.Table(authors_tbl)
         table.put_item(Item={
