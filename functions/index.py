@@ -5,32 +5,43 @@ import os
 dynamodb = boto3.resource('dynamodb')
 
 def handler(event, context):
-    table_name = os.environ.get('TABLE_NAME')
     action = os.environ.get('ACTION')
-    table = dynamodb.Table(table_name)
     
-    sample_id = "101"
-    sample_title = "Cloud Computing with Terraform"
-    sample_category = "DevOps"
+    # Збираємо ARNs та імена для всіх 3-х таблиць
+    courses_tbl = os.environ.get('COURSES_TABLE_NAME')
+    authors_tbl = os.environ.get('AUTHORS_TABLE_NAME')
+    
+    message = f"Функція [{action}] успішно запущена."
 
-    if action == "create":
+    # Приклад: якщо це лямбда для курсів — пишемо в таблицю курсів
+    if action == "create-course":
+        table = dynamodb.Table(courses_tbl)
         table.put_item(Item={
-            'ID': sample_id,
-            'Title': sample_title,
-            'Category': sample_category
+            'id': 'c-101', 
+            'Title': 'Terraform Pro', 
+            'Category': 'DevOps'
         })
-        message = f"Курс '{sample_title}' створено з ID: {sample_id}"
-    else:
-        message = f"Функція {action} виконана для таблиці {table_name}"
+        message = "Курс створено в таблиці Courses!"
+        
+    # Приклад: якщо це лямбда для авторів — пишемо в таблицю авторів
+    elif action == "create-author":
+        table = dynamodb.Table(authors_tbl)
+        table.put_item(Item={
+            'id': 'a-101', 
+            'Name': 'John Doe',
+            'Expertise': 'Cloud'
+        })
+        message = "Автора створено в таблиці Authors!"
 
     return {
         'statusCode': 200,
         'body': json.dumps({
             "message": message,
-            "data": {
-                "ID": sample_id,
-                "Title": sample_title,
-                "Category": sample_category
+            "action": action,
+            "arns": {
+                "courses": os.environ.get('COURSES_TABLE_ARN'),
+                "authors": os.environ.get('AUTHORS_TABLE_ARN'),
+                "categories": os.environ.get('CATEGORIES_TABLE_ARN')
             }
         }, ensure_ascii=False)
     }
