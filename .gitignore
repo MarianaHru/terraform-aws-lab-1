@@ -1,9 +1,0 @@
-.terraform/
-*.tfstate
-*.tfstate.backup
-.terraform.lock.hcl
-awscliv2.zip
-aws/
-.node_modules
-package.json
-package-lock.json
