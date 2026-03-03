@@ -4,3 +4,4 @@
 .terraform.lock.hcl
 awscliv2.zip
 aws/
+.node_modules
