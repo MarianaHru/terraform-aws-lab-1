@@ -5,3 +5,5 @@
 awscliv2.zip
 aws/
 .node_modules
+package.json
+package-lock.json
