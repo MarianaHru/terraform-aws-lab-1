@@ -1,14 +1,6 @@
 provider "aws" {
-  region = "eu-north-1"
-  default_tags {
-    tags = {
-      Environment = "dev"
-      Project     = "lab1"
-      ManagedBy   = "Terraform"
-    }
-  }
+  region = "us-east-1" 
 }
-
 
 module "base_label" {
   source    = "cloudposse/label/null"
@@ -17,14 +9,12 @@ module "base_label" {
   stage     = "dev"
 }
 
-
 module "dynamodb_courses" {
   source     = "./modules/dynamodb"
   table_name = "courses"
   hash_key   = "id"
   context    = module.base_label.context
 }
-
 
 module "dynamodb_authors" {
   source     = "./modules/dynamodb"
@@ -33,7 +23,6 @@ module "dynamodb_authors" {
   context    = module.base_label.context
 }
 
-
 module "dynamodb_categories" {
   source     = "./modules/dynamodb"
   table_name = "categories"
@@ -41,24 +30,22 @@ module "dynamodb_categories" {
   context    = module.base_label.context
 }
 
-
+# 4. Конфігурація для 6 лямбда-функцій (Дія + Таблиця)
 locals {
-  api_functions = [
-    "delete-course",
-    "get-all-authors",
-    "get-all-courses",
-    "get-course",
-    "save-course",
-    "update-course"
-  ]
+  lambdas = {
+    "get-all-authors" = { action = "dynamodb:Scan",       table_arn = module.dynamodb_authors.table_arn,   table_name = module.dynamodb_authors.table_name }
+    "get-all-courses" = { action = "dynamodb:Scan",       table_arn = module.dynamodb_courses.table_arn,   table_name = module.dynamodb_courses.table_name }
+    "get-course"      = { action = "dynamodb:GetItem",    table_arn = module.dynamodb_courses.table_arn,   table_name = module.dynamodb_courses.table_name }
+    "save-course"     = { action = "dynamodb:PutItem",    table_arn = module.dynamodb_courses.table_arn,   table_name = module.dynamodb_courses.table_name }
+    "update-course"   = { action = "dynamodb:PutItem",    table_arn = module.dynamodb_courses.table_arn,   table_name = module.dynamodb_courses.table_name }
+    "delete-course"   = { action = "dynamodb:DeleteItem", table_arn = module.dynamodb_courses.table_arn,   table_name = module.dynamodb_courses.table_name }
+  }
 }
 
-
+# 5. Створення індивідуальних IAM Ролей для кожної функції
 resource "aws_iam_role" "lambda_exec" {
-  for_each = toset(local.api_functions)
-  
-  
-  name = "lpnu-dev-${each.key}-role"
+  for_each = local.lambdas
+  name     = "${module.base_label.id}-${each.key}-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -70,64 +57,50 @@ resource "aws_iam_role" "lambda_exec" {
   })
 }
 
-
+# 6. Створення політик (Доступ до CloudWatch Logs + Конкретна дія в DynamoDB)
 resource "aws_iam_role_policy" "lambda_policy" {
-  for_each = toset(local.api_functions)
-  
-  name = "DatabaseAccess"
-  role = aws_iam_role.lambda_exec[each.key].id
-  
+  for_each = local.lambdas
+  name     = "LambdaPolicy"
+  role     = aws_iam_role.lambda_exec[each.key].id
+
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Action = [
-        "dynamodb:PutItem",
-        "dynamodb:GetItem",
-        "dynamodb:UpdateItem",
-        "dynamodb:DeleteItem",
-        "dynamodb:Scan"
-      ]
-      Effect   = "Allow"
-      Resource = [
-        module.dynamodb_courses.table_arn,
-        module.dynamodb_authors.table_arn,
-        module.dynamodb_categories.table_arn
-      ]
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = [each.value.action]
+        Resource = [each.value.table_arn]
+      }
+    ]
   })
 }
 
-
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/functions/index.py"
-  output_path = "${path.module}/functions/lambda_function.zip"
+  source_dir  = "${path.module}/functions" 
+  output_path = "${path.module}/lambda_payload.zip"
 }
 
-
 resource "aws_lambda_function" "api" {
-  for_each      = toset(local.api_functions)
+  for_each      = local.lambdas
+  
   filename      = data.archive_file.lambda_zip.output_path
-  
-  
-  function_name = "lpnu-dev-${each.key}"
-  
-  
+  function_name = "${module.base_label.id}-${each.key}"
   role          = aws_iam_role.lambda_exec[each.key].arn
-  handler       = "index.handler"
-  runtime       = "python3.9"
+  
+  handler       = "${each.key}.handler" 
+  runtime       = "nodejs18.x"
 
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   environment {
     variables = {
-      ACTION                = each.key
-      COURSES_TABLE_NAME    = module.dynamodb_courses.table_name
-      COURSES_TABLE_ARN     = module.dynamodb_courses.table_arn
-      AUTHORS_TABLE_NAME    = module.dynamodb_authors.table_name
-      AUTHORS_TABLE_ARN     = module.dynamodb_authors.table_arn
-      CATEGORIES_TABLE_NAME = module.dynamodb_categories.table_name
-      CATEGORIES_TABLE_ARN  = module.dynamodb_categories.table_arn
+      TABLE_NAME = each.value.table_name
     }
   }
 }
