@@ -1,0 +1,1 @@
+export default "https://sviego0ixa.execute-api.us-east-1.amazonaws.com/v1";
